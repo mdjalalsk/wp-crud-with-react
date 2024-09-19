@@ -124,7 +124,8 @@ class Crud_Operation {
      * @since 1.0.0
      */
     public function init_hooks() {
-        add_action( 'admin_menu', array( $this, 'crud_admin_menu' ) );
+         add_action( 'admin_menu', array( $this, 'crud_admin_menu' ) );
+         add_action('admin_enqueue_scripts', array( $this, 'crud_admin_enqueue_scripts' ) );
     }
 
     /**
@@ -134,10 +135,10 @@ class Crud_Operation {
      */
     public function crud_admin_menu() {
         add_menu_page(
-            'CRUD Operations',
-            'CRUD Operations',
+            'CRUD Operation',
+            'CRUD Operation',
             'manage_options',
-            'crud-operations',
+            'crud-operation',
             array( $this, 'crud_page_content' ),
             'dashicons-admin-generic',
             6
@@ -150,8 +151,9 @@ class Crud_Operation {
      * @since 1.0.0
      */
     public function crud_page_content() {
-        echo '<div class="wrap"><h1>CRUD Operations</h1></div>';
-        // Here you will include the React app or any HTML for your CRUD operations.
+        echo '<div class="wrap">';
+        echo '<div id="react-app"> </div>';
+        echo '</div>';
     }
 
     /**
@@ -173,4 +175,23 @@ class Crud_Operation {
         delete_option( 'crud_version' );
     }
 
+    /**
+     * Enqueue scripts for the admin area.
+     *
+     * Enqueues the React application script and localizes data for use in the script.
+     *
+     * @since 1.0.0
+     */
+    public function crud_admin_enqueue_scripts($hook)
+    {
+        if ($hook === 'toplevel_page_crud-operation') {
+            $react=include CRUD_PLUGIN_DIR . 'build/index.asset.php';
+            wp_enqueue_script('crud-react-app', CRUD_PLUGIN_URL . 'build/index.js', $react['dependencies'],$react['version'], ['in_footer' => true]);
+
+            wp_localize_script('crud-react-app', 'crudApi', array(
+                'root' => esc_url_raw(rest_url()),
+                'nonce' => wp_create_nonce('wp_rest'),
+            ));
+        }
+    }
 }
