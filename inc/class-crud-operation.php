@@ -126,6 +126,8 @@ class Crud_Operation {
     public function init_hooks() {
          add_action( 'admin_menu', array( $this, 'crud_admin_menu' ) );
          add_action('admin_enqueue_scripts', array( $this, 'crud_admin_enqueue_scripts' ) );
+        add_action('rest_api_init', array( $this, 'register_rest_routes' ));
+
     }
 
     /**
@@ -186,12 +188,164 @@ class Crud_Operation {
     {
         if ($hook === 'toplevel_page_crud-operation') {
             $react=include CRUD_PLUGIN_DIR . 'build/index.asset.php';
-            wp_enqueue_script('crud-react-app', CRUD_PLUGIN_URL . 'build/index.js', $react['dependencies'],$react['version'], ['in_footer' => true]);
+//
+            wp_enqueue_style('crud-react-style', CRUD_PLUGIN_URL .'./build/style-index.css',array(),$react['version']);
+            wp_enqueue_script('crud-react-script', CRUD_PLUGIN_URL . 'build/index.js', $react['dependencies'],$react['version'], ['in_footer' => true]);
 
-            wp_localize_script('crud-react-app', 'crudApi', array(
+            wp_localize_script('crud-react-script', 'crudApi', array(
                 'root' => esc_url_raw(rest_url()),
                 'nonce' => wp_create_nonce('wp_rest'),
             ));
         }
     }
+    public function register_rest_routes()
+    {
+        register_rest_route('crud/v1', '/items', array(
+            'methods' => 'GET',
+            'callback' => [$this, 'get_items'],
+            'permission_callback' => [$this, 'check_permission']
+        ));
+        register_rest_route('crud/v1', '/item', array(
+            'methods' => 'POST',
+            'callback' => [$this, 'create_item'],
+            'permission_callback' => [$this, 'check_permission']
+        ));
+
+        register_rest_route('crud/v1', '/item/(?P<id>\d+)', array(
+            'methods' => 'PUT',
+            'callback' => [$this, 'update_item'],
+            'permission_callback' => [$this, 'check_permission']
+        ));
+        register_rest_route('crud/v1', '/item/(?P<id>\d+)', array(
+            'methods' => 'DELETE',
+            'callback' => [$this, 'delete_item'],
+            'permission_callback' => [$this, 'check_permission']
+        ));
+    }
+
+    /**
+     * Check permission
+     * @return true
+     */
+
+    public function check_permission()
+    {
+        return true;
+    }
+    /**
+     * Retrieve items from the database with pagination.
+     *
+     * @param WP_REST_Request $request The request object.
+     * @return WP_REST_Response Response object containing items and total count.
+     * @since 1.0.0
+     */
+    public function get_items( $request ) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'crud_table';
+
+        $page = max(1, intval( wp_unslash( $request['page'] ) ?? 1));
+        $per_page = max(1, min(100, intval(wp_unslash( $request['per_page'] ) ?? 5 )));
+        $offset = ($page - 1) * $per_page;
+        $items = $wpdb->get_results( $wpdb->prepare("SELECT * FROM $table_name LIMIT %d OFFSET %d", $per_page, $offset) );
+        $total_items = $wpdb->get_var("SELECT COUNT(*) FROM $table_name");
+
+        return rest_ensure_response( array(
+            'items' => $items,
+            'total' => $total_items,
+            'total_pages' => ceil($total_items / $per_page),
+            'current_page' => $page,
+        ));
+    }
+
+    /**
+     * Create a new item in the database.
+     *
+     * @param WP_REST_Request $request The request object containing item data.
+     * @return WP_REST_Response Response object confirming item creation.
+     * @since 1.0.0
+     */
+    public function create_item( $request ) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'crud_table';
+
+        $name = sanitize_text_field( wp_unslash( $request['name'] ) );
+        $email = sanitize_email( wp_unslash( $request['email'] ) );
+
+        $wpdb->insert(
+            $table_name,
+            array(
+                'name' => $name,
+                'email' => $email,
+            ),
+            array(
+                '%s',
+                '%s',
+            )
+        );
+
+        return rest_ensure_response( array(
+            'message' => 'Item created successfully!',
+            'item_id' => $wpdb->insert_id,
+        ));
+    }
+
+    /**
+     * Update an existing item in the database.
+     *
+     * @param WP_REST_Request $request The request object containing updated item data.
+     * @return WP_REST_Response Response object confirming item update.
+     * @since 1.0.0
+     */
+    public function update_item( $request ) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'crud_table';
+
+        $id = (int) wp_unslash( $request['id'] );
+        $name = sanitize_text_field( wp_unslash( $request['name'] ) );
+        $email = sanitize_email( wp_unslash( $request['email'] ) );
+
+        $wpdb->update(
+            $table_name,
+            array(
+                'name' => $name,
+                'email' => $email,
+            ),
+            array( 'id' => $id ),
+            array(
+                '%s',
+                '%s',
+            ),
+            array( '%d' )
+        );
+
+        return rest_ensure_response( array(
+            'message' => 'Item updated successfully!',
+        ));
+    }
+    /**
+     * Delete an item from the database.
+     *
+     * @param WP_REST_Request $request The request object containing the ID of the item to delete.
+     * @return WP_REST_Response Response object confirming item deletion.
+     * @since 1.0.0
+     */
+    public function delete_item( $request ) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'crud_table';
+
+        $id = (int) wp_unslash( $request['id'] );
+
+        $wpdb->delete(
+            $table_name,
+            array( 'id' => $id ),
+            array( '%d' )
+        );
+
+        return rest_ensure_response( array(
+            'message' => 'Item deleted successfully!',
+        ));
+    }
+
+
+
 }
