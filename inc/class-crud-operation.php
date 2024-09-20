@@ -239,6 +239,8 @@ class Crud_Operation {
      * @return WP_REST_Response Response object containing items and total count.
      * @since 1.0.0
      */
+    // pagination manage backend API.
+    /**
     public function get_items( $request ) {
         global $wpdb;
         $table_name = $wpdb->prefix . 'crud_table';
@@ -256,6 +258,19 @@ class Crud_Operation {
             'current_page' => $page,
         ));
     }
+*/
+     //pagination manage frontend API.
+    public function get_items( $request ) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'crud_table';
+        $items = $wpdb->get_results("SELECT * FROM $table_name");
+        $total_items = count( $items );
+        return rest_ensure_response( array(
+            'items' => $items,
+            'total' => $total_items,
+        ));
+    }
+
 
     /**
      * Create a new item in the database.
