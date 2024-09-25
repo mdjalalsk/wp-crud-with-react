@@ -1,5 +1,4 @@
 <?php
-
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
@@ -99,8 +98,6 @@ class Crud_Operation {
 
         $table_name = $wpdb->prefix . 'crud_table';
         $charset_collate = $wpdb->get_charset_collate();
-
-        // SQL query to create the table with created and updated timestamps.
         $sql = "CREATE TABLE IF NOT EXISTS $table_name (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
             name tinytext NOT NULL,
@@ -127,6 +124,7 @@ class Crud_Operation {
          add_action( 'admin_menu', array( $this, 'crud_admin_menu' ) );
          add_action('admin_enqueue_scripts', array( $this, 'crud_admin_enqueue_scripts' ) );
         add_action('rest_api_init', array( $this, 'register_rest_routes' ));
+        add_action('wp_ajax_handle_delete_table', array($this, 'handle_delete_db_table'));
 
     }
 
@@ -188,14 +186,23 @@ class Crud_Operation {
     {
         if ($hook === 'toplevel_page_crud-operation') {
             $react=include CRUD_PLUGIN_DIR . 'build/index.asset.php';
-//
             wp_enqueue_style('crud-react-style', CRUD_PLUGIN_URL .'./build/style-index.css',array(),$react['version']);
-            wp_enqueue_script('crud-react-script', CRUD_PLUGIN_URL . 'build/index.js', $react['dependencies'],$react['version'], ['in_footer' => true]);
+            wp_enqueue_script('crud-react-script', CRUD_PLUGIN_URL .'build/index.js', $react['dependencies'],$react['version'], ['in_footer' => true]);
 
             wp_localize_script('crud-react-script', 'crudApi', array(
                 'root' => esc_url_raw(rest_url()),
                 'nonce' => wp_create_nonce('wp_rest'),
             ));
+        }
+        if ($hook === 'plugins.php') {
+            wp_enqueue_script('crud-deactivation-script', CRUD_PLUGIN_URL . 'src/deactivation.js', array(), CRUD_VERSION, true);
+            global $wpdb;
+            $table_name = $wpdb->prefix . 'crud_table';
+            wp_localize_script('crud-deactivation-script', 'deactivationData', array(
+                    'nonce' => wp_create_nonce('ajax_nonce'),
+                   'tableName' => $table_name,
+                    'ajaxUrl' => admin_url('admin-ajax.php'),
+                 ));
         }
     }
     public function register_rest_routes()
@@ -362,5 +369,23 @@ class Crud_Operation {
     }
 
 
+    /**
+     * Activations Table Deleted
+     * @return void
+     */
+    public function handle_delete_db_table() {
+        check_ajax_referer('ajax_nonce', 'nonce');
+
+        if (isset($_POST['delete_table']) && $_POST['delete_table'] === 'yes') {
+            global $wpdb;
+            $table_name = $wpdb->prefix . 'crud_table';
+            $wpdb->query("DROP TABLE IF EXISTS $table_name");
+            wp_send_json_success();
+        } else {
+            wp_send_json_success();
+        }
+
+        exit();
+    }
 
 }
